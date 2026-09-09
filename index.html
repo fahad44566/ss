@@ -1,481 +1,645 @@
-function doPost(e) {
-  try {
-    var data = JSON.parse(e.postData.contents);
-    var log = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Log");
-    log.appendRow([new Date(), data.emp_id, (data.lat+","+data.lng), data.heart_rate, data.spo2+"%", data.body_temp.toFixed(1), data.battery+"%", data.status, data.fcm_token]);
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>كلبشة المواقف</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#15191C; --ink-2:#5A625F; --ink-3:#8B928F;
+  --paper:#F4F5F2; --card:#FFFFFF; --line:#DCE0DA;
+  --locked:#A8341A; --locked-bg:#FBEDE9;
+  --freed:#1A6B4F; --freed-bg:#E8F3ED;
+  --act:#1F3A52; --warn:#8A5A06; --warn-bg:#FBF1DC;
+  --r:10px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;
+  font-size:16px; line-height:1.6;
+  font-variant-numeric:tabular-nums;
+  -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px 120px}
+header{
+  position:sticky;top:0;z-index:20;background:var(--paper);
+  border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;
+  padding:12px 16px;max-width:560px;margin:0 auto;
+}
+header .brand{font-weight:600;font-size:17px;letter-spacing:-.2px;flex:1}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--freed);flex:none}
+.dot.off{background:var(--ink-3)}
+.who{font-size:13px;color:var(--ink-2)}
 
-    // الرد الصحيح بصيغة JSON لكي تفهمه الساعة
-    return ContentService.createTextOutput(JSON.stringify({"result":"success"}))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({"error":err.toString()}))
-      .setMimeType(ContentService.MimeType.JSON);
+h1{font-size:22px;font-weight:600;margin:22px 0 4px;letter-spacing:-.3px}
+h2{font-size:17px;font-weight:600;margin:26px 0 10px}
+p.sub{color:var(--ink-2);font-size:14px;margin:0 0 18px}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.card + .card{margin-top:10px}
+
+.state{display:inline-block;font-size:13px;font-weight:500;padding:3px 11px;border-radius:999px}
+.state.locked{background:var(--locked-bg);color:var(--locked)}
+.state.freed{background:var(--freed-bg);color:var(--freed)}
+.state.warn{background:var(--warn-bg);color:var(--warn)}
+
+.rowtop{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.caseno{font-weight:600;font-size:16px}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:14px}
+dt{color:var(--ink-2);white-space:nowrap}
+dd{margin:0;text-align:left}
+.plate{font-weight:600;font-size:17px;letter-spacing:1px}
+
+label{display:block;font-size:14px;color:var(--ink-2);margin:14px 0 6px}
+input,select,textarea{
+  width:100%;font-family:inherit;font-size:16px;color:var(--ink);
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:12px 13px;
+}
+input:focus,select,textarea:focus{outline:2px solid var(--act);outline-offset:1px}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-2) 50%),linear-gradient(135deg,var(--ink-2) 50%,transparent 50%);background-position:14px 21px,20px 21px;background-size:6px 6px;background-repeat:no-repeat}
+
+button{
+  font-family:inherit;font-size:16px;font-weight:500;
+  border-radius:var(--r);padding:14px 18px;min-height:50px;width:100%;
+  border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;
+}
+button:active{transform:scale(.99)}
+button.primary{background:var(--act);border-color:var(--act);color:#fff}
+button.danger{background:var(--locked);border-color:var(--locked);color:#fff}
+button.go{background:var(--freed);border-color:var(--freed);color:#fff}
+button.quiet{background:transparent;border-color:transparent;color:var(--ink-2);min-height:auto;padding:8px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.stat .k{font-size:13px;color:var(--ink-2)}
+.stat .v{font-size:24px;font-weight:600;line-height:1.3}
+
+.list a{display:block;text-decoration:none;color:inherit}
+.item{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:13px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+.item .grow{flex:1;min-width:0}
+.item .meta{font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.age{font-size:14px;font-weight:500;white-space:nowrap}
+.age.over{color:var(--locked)}
+
+.plate-in{display:flex;align-items:center;justify-content:center;gap:10px;background:var(--card);
+  border:1px solid var(--line);border-radius:var(--r);padding:12px 10px;direction:rtl}
+.plate-in .grp{display:flex;gap:6px;flex:1}
+.plate-in .sep{width:1px;height:38px;background:var(--line);flex:none}
+.cell{flex:1;min-width:0;max-width:48px;height:56px;text-align:center;font-size:22px;font-weight:600;
+  padding:0;border-radius:8px;caret-color:var(--act)}
+.cell:focus{outline:2px solid var(--act);outline-offset:1px}
+.cell.N{font-variant-numeric:tabular-nums}
+.plate-hint{font-size:13px;color:var(--ink-3);text-align:center;margin:6px 0 0}
+#sig{width:100%;height:170px;background:var(--card);border:1px dashed var(--line);border-radius:var(--r);touch-action:none;display:block}
+.photo{margin-top:10px;border-radius:var(--r);width:100%;display:block;border:1px solid var(--line)}
+.pick{display:flex;align-items:center;justify-content:center;gap:8px;border:1px dashed var(--line);border-radius:var(--r);padding:14px;color:var(--ink-2);font-size:14px;cursor:pointer;background:var(--card)}
+input[type=file]{display:none}
+
+.bar{position:fixed;bottom:0;left:0;right:0;background:var(--paper);border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom));z-index:20}
+.bar .in{max-width:560px;margin:0 auto}
+
+.note{background:var(--warn-bg);color:var(--warn);border-radius:var(--r);padding:12px 14px;font-size:14px;margin:12px 0}
+.err{color:var(--locked);font-size:14px;margin-top:8px}
+.empty{text-align:center;color:var(--ink-2);padding:40px 20px;font-size:15px}
+.qr{background:#fff;padding:14px;border-radius:var(--r);display:flex;justify-content:center}
+.sticker{background:#fff;border:2px solid var(--ink);border-radius:12px;padding:20px;text-align:center}
+.sticker .big{font-size:26px;font-weight:600;margin:10px 0 4px}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--act);border-radius:50%;animation:s .7s linear infinite;vertical-align:-3px}
+@keyframes s{to{transform:rotate(360deg)}}
+@media print{header,.bar,.noprint{display:none}body{background:#fff}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="dot" id="net"></span>
+  <span class="brand">كلبشة المواقف</span>
+  <span class="who" id="who"></span>
+</header>
+
+<div class="wrap"><main id="view"><p class="empty"><span class="spin"></span></p></main></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+/* ============ الإعدادات ============ */
+const API = "ضع_هنا_رابط_Apps_Script";   // يُستخدم فقط عند الاستضافة الخارجية: .../exec
+
+/* الرابط الثابت المطبوع في الـ QR.
+   عند التقديم من Apps Script يُحقن تلقائياً، وعند الاستضافة الخارجية يؤخذ من العنوان الحالي. */
+const _INJ = "<?= appUrl ?>";
+const APP_URL = _INJ.indexOf("<") === 0 ? location.origin + location.pathname : _INJ;
+const SLA_MIN = 120;                      // تنبيه إذا تجاوزت الكلبشة هذي المدة
+const VIOLATIONS = [
+  "وقوف في موقف ذوي الإعاقة",
+  "وقوف في موقف مخصص",
+  "إعاقة حركة المرور",
+  "وقوف أمام مخرج طوارئ",
+  "وقوف في ممر المشاة",
+  "بدون تصريح دخول",
+  "أخرى"
+];
+
+/* ============ تخزين آمن ============ */
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+let EMP = store.get("emp");           // {name, code}
+let QUEUE = store.get("queue") || []; // عمليات لم تُرسل بعد
+
+/* ============ الاتصال ============ */
+const netDot = document.getElementById("net");
+function paintNet(){ netDot.className = navigator.onLine ? "dot" : "dot off"; }
+addEventListener("online", ()=>{ paintNet(); flushQueue(); });
+addEventListener("offline", paintNet); paintNet();
+
+async function api(action, data){
+  /* مُقدَّمة من Apps Script: نداء مباشر بلا CORS */
+  if(window.google && google.script && google.script.run){
+    return new Promise((ok, no) => {
+      google.script.run
+        .withSuccessHandler(r => r.ok ? ok(r.data) : no(new Error(r.error)))
+        .withFailureHandler(e => no(new Error(e.message || "تعذّر الاتصال")))
+        .rpc(JSON.stringify({action, emp:EMP, data}));
+    });
   }
+  const res = await fetch(API, {
+    method:"POST",
+    headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body: JSON.stringify({action, emp:EMP, data})
+  });
+  const out = await res.json();
+  if(!out.ok) throw new Error(out.error || "تعذّر إتمام العملية");
+  return out.data;
+}
+function queueUp(action, data){
+  QUEUE.push({action, data, emp:EMP, at:Date.now()});
+  store.set("queue", QUEUE);
+}
+async function flushQueue(){
+  if(!QUEUE.length || !navigator.onLine) return;
+  const left = [];
+  for(const job of QUEUE){
+    try{ await api(job.action, job.data); }catch(e){ left.push(job); }
+  }
+  QUEUE = left; store.set("queue", QUEUE);
+  if(!left.length) render();
 }
 
-/**
- * Ultimate Security Master v7.0 - [Direct Instant Messaging]
- */
-
-// ⚠️ تنبيه أمني لم يُغيَّر بالكود: هذا المفتاح مكشوف وسبق تحذيرك بإلغائه من Firebase Console
-// وتخزين البديل عبر Script Properties بدل كتابته هنا مباشرة.
-// هذا التحذير ما زال قائماً - يُنصح بإلغاء هذا المفتاح فوراً من Firebase Console (IAM & Admin)
-// وتوليد مفتاح جديد وتخزينه عبر PropertiesService بدل كتابته صراحة بالكود.
-const SERVICE_ACCOUNT = {
-  "project_id": "android-f549d",
-  "client_email": "firebase-adminsdk-fbsvc@android-f549d.iam.gserviceaccount.com",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDA17tguRyUCnoA\nv8iZv+VVUlxg8BZtXz9WI5XwW1sR6cWr1iLoAIM/GaxDj3NLBlrHkMxude1MuixK\naQ9WquHELYZcy5kD7MFEx3jA9GwwTChGGFtD2Qk4yBUpIBJNcae1htdj0MLyGnYo\n7B8DHRxkIUUZj8k6OJvy6MRVR9r8NWTk1I7EXhn7q3dA2cQ2cZCgJE61dLu+4Mvg\nfNOwY0IYvYKUpmZws92GHBmWIAxgwiGitBANRMDDRfGJyoqaOwMfCUYOORs47G7J\nSRPvPgrG9pitiaVIDvoHfzNgP9ZsQv75osbgLshB8R+FCE6tVyQESZ82DI5oCkvC\n2nM7LFGzAgMBAAECggEACloKRvDo5dGCJxQkcoxohSH8r39z1L8uKTOT0uk0hEum\nPskp6oZMhVCdfKrwp3BZ4yiUsMFH0byUsBHfrulRYTSIZ+bN+fX1kfmbM9BrFlSg\nPNMF4yh9ZDzpVeHQ2bNmK0pnuYX1UQW2ng++wm4HniBjEzIyvRtY07tG/sTyrmMf\nSpEdc8WYJxDTw0AQDnz0VxL/dX6ULQlecGpbdsqiEzLXvOyoyrf/5gipzSIIvwd1\n/iuBibS7KFSlgK8unQz57s30+M+IZ1AB+rI1TTlcsYXgX5ynADALqVVpkupcywMv\nj1/+Wr5ETLuFFH19GtvKPc4We0WbWQxMQBJ6WGNgkQKBgQD+apINGitkv/66Z4Vz\nAJcmGCHWDpk+Z628HPvg1k50Jc0VpZRMvjmHv9Sa6neAqgXuIenKm6S5UjPe86d9\nMQSSiHy3UXCgHDmAX4DXgPp0rNXCWqP29lqc1iDlhnHb1ETXjeRYGzvi+Onl7+3w\nL2JJxUc8yEK9I6FJ8XvR4sASdQKBgQDCCwoupOHwtbWOIDf853sHaxiN3UkaZz3e\nlnmI9nQ2v39rpBcRvOYiGzttXc7UsjVb/ULMH4XE/9tc2/HpckQMeXMa1Xzb1TXS\nILV2QBSVdJxn5fXvv/IVMnRcFu9T/8MrdIIzMORpXECUit+/P782+5oDcIwQhzzQ\nmW4sH/l+hwKBgQDxo/rQIvjwGkMwfL6NOhRVhDou+3KliQfEUasSI7okKvsdAkVW\nlp5BxvuBoAyc0eAMC33oh+fudJr7uWRtTa9QFf6OhvV3vRcITK0tAj3fr4DftgNh\nvx7VM7PPDOD7sCMqsIQfAs7ghxZw5G+T3w11j8BXhMWOq1a3ynqWIM3ZOQKBgQCN\n+6n9q2Qvz6YDUwvkoDRjnzeeRncBPN4GizBuyXcLwF+qEa1Xq1LxTd/UDLoU5Dkr\nEEvaNI6bMWP/tGh0msm0HwHcdq4f5Qi2snxVBFqLaYIwfBHS1i562CpQX+/LFPBo\nUZ4bewEHHxuaFWvW8vwlbUCql6XFSk9zi3EUFGlo7QKBgHEBim7tlI+WK4tSwN4S\nui8gxuEYwmhT0+qkEP/ICcXXNc8sW5Uovjka6mVlEHVojPsiVx8KhpSe5QqOASWE\nIEdGTSMw8dz3e7DvQ+zvvyvjNPmP1XG3BZ2njZ6UI34p4sPG57TZyvg0ENvo+Mmk\nm1F2Xlrz4lLr33LrDrrx99l6\n-----END PRIVATE KEY-----\n"
+/* ============ أدوات ============ */
+const $ = s => document.querySelector(s);
+const view = $("#view");
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function since(iso){
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime())/60000));
+  if(m < 60) return m + " دقيقة";
+  const h = Math.floor(m/60);
+  return h + " ساعة" + (m%60 ? " و" + (m%60) + " د" : "");
+}
+function clock(iso){
+  return new Date(iso).toLocaleString("ar-SA-u-ca-gregory",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"});
+}
+async function shrink(file){
+  const img = await createImageBitmap(file);
+  const max = 1100, sc = Math.min(1, max/Math.max(img.width, img.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(img.width*sc); c.height = Math.round(img.height*sc);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", .72);
+}
+function photoField(id, label){
+  return `<div class="pick" onclick="document.getElementById('${id}').click()" id="${id}-box">${label}</div>
+          <input type="file" id="${id}" accept="image/*" capture="environment" onchange="onPhoto('${id}')">
+          <img class="photo" id="${id}-prev" style="display:none">`;
+}
+window.PHOTOS = {};
+window.onPhoto = async function(id){
+  const f = document.getElementById(id).files[0]; if(!f) return;
+  const box = document.getElementById(id+"-box"); box.innerHTML = '<span class="spin"></span>';
+  PHOTOS[id] = await shrink(f);
+  const p = document.getElementById(id+"-prev"); p.src = PHOTOS[id]; p.style.display = "block";
+  box.textContent = "تغيير الصورة";
 };
 
-/** 1. إنشاء الجداول النظيفة (شغل هذه أولاً) */
-function initializeSystem() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var log = ss.getSheetByName("Log") || ss.insertSheet("Log");
-  log.clear().appendRow(["الوقت", "المعرف الوظيفي", "الموقع", "النبض", "الأكسجين", "الحرارة", "البطارية", "الحالة", "Token"]);
+/* ============ التوقيع ============ */
+function signPad(){
+  const c = $("#sig"); if(!c) return;
+  const r = c.getBoundingClientRect(), d = devicePixelRatio || 1;
+  c.width = r.width*d; c.height = r.height*d;
+  const x = c.getContext("2d");
+  x.scale(d,d); x.lineWidth = 2.2; x.lineCap = "round"; x.strokeStyle = "#15191C";
+  let on = false;
+  const pt = e => { const b = c.getBoundingClientRect(); return [e.clientX-b.left, e.clientY-b.top]; };
+  c.addEventListener("pointerdown", e => { on = true; c.dataset.drawn = "1"; x.beginPath(); x.moveTo(...pt(e)); c.setPointerCapture(e.pointerId); });
+  c.addEventListener("pointermove", e => { if(on){ x.lineTo(...pt(e)); x.stroke(); } });
+  c.addEventListener("pointerup", ()=> on = false);
+}
+window.clearSig = function(){ const c = $("#sig"); c.getContext("2d").clearRect(0,0,c.width,c.height); c.dataset.drawn = ""; };
 
-  var ctrl = ss.getSheetByName("Control") || ss.insertSheet("Control");
-  ctrl.clear().appendRow(["المعرف الوظيفي", "الأمر", "الحالة (SOS/PENDING)", "الرسالة"]);
-  ctrl.getRange(1,1,1,4).setBackground("#7C3AED").setFontColor("white");
-
-  SpreadsheetApp.getUi().alert("✅ تم التجهيز! اتبع خطوة الـ Trigger الآن.");
+/* ===== إدخال اللوحة بمربعات: حروف ثم أرقام ===== */
+const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+function toLatin(s){
+  return String(s).replace(/[٠-٩]/g, d => String(AR_DIGITS.indexOf(d)))
+                  .replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)));
+}
+function plateBox(){
+  const L = [0,1,2].map(i => `<input class="cell L" id="L${i}" maxlength="1" autocomplete="off" inputmode="text" aria-label="حرف ${i+1}">`).join("");
+  const N = [0,1,2,3].map(i => `<input class="cell N" id="N${i}" maxlength="1" autocomplete="off" inputmode="numeric" aria-label="رقم ${i+1}">`).join("");
+  return `<div class="plate-in" id="plateBox">
+      <div class="grp">${L}</div><span class="sep"></span><div class="grp">${N}</div>
+    </div>
+    <p class="plate-hint">٣ حروف ثم الأرقام — ينتقل تلقائياً</p>`;
+}
+function plateCells(){ return Array.from(document.querySelectorAll("#plateBox .cell")); }
+function plateBind(prefill){
+  const cells = plateCells(); if(!cells.length) return;
+  cells.forEach((el, i) => {
+    el.addEventListener("input", () => {
+      let v = el.value;
+      v = el.classList.contains("N") ? toLatin(v).replace(/\D/g,"") : v.replace(/[^\u0621-\u064A]/g,"");
+      el.value = v.slice(-1);
+      if(el.value && cells[i+1]) cells[i+1].focus();
+    });
+    el.addEventListener("keydown", e => {
+      if(e.key === "Backspace" && !el.value && cells[i-1]){ e.preventDefault(); cells[i-1].value = ""; cells[i-1].focus(); }
+    });
+    el.addEventListener("focus", () => el.select());
+  });
+  const box = document.getElementById("plateBox");
+  box.addEventListener("paste", e => {
+    e.preventDefault();
+    plateFill((e.clipboardData || window.clipboardData).getData("text"));
+  });
+  if(prefill) plateFill(prefill);
+}
+function plateFill(txt){
+  const s = toLatin(txt);
+  const L = (s.match(/[\u0621-\u064A]/g) || []).slice(0,3);
+  const N = (s.match(/\d/g) || []).slice(0,4);
+  plateCells().forEach(el => el.value = "");
+  L.forEach((c,i) => { const el = document.getElementById("L"+i); if(el) el.value = c; });
+  N.forEach((c,i) => { const el = document.getElementById("N"+i); if(el) el.value = c; });
+}
+function plateValue(){
+  const L = plateCells().filter(e => e.classList.contains("L")).map(e => e.value).join("");
+  const N = plateCells().filter(e => e.classList.contains("N")).map(e => e.value).join("");
+  return { letters:L, digits:N, text: L.split("").join(" ") + " " + N, ok: L.length === 3 && N.length >= 3 };
 }
 
-/** 2. استقبال البيانات من الساعة */
-function doPost(e) {
-  var data = JSON.parse(e.postData.contents);
-  var log = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Log");
-  log.appendRow([new Date(), data.emp_id, (data.lat+","+data.lng), data.heart_rate, data.spo2+"%", data.body_temp.toFixed(1), data.battery+"%", data.status, data.fcm_token]);
-  return ContentService.createTextOutput("OK");
-}
+/* ============ التوجيه ============ */
+addEventListener("hashchange", render);
+function go(h){ location.hash = h; }
+window.go = go;
 
-/** 3. الإرسال اللحظي عند الكتابة (onEditTrigger) */
-function onEditTrigger(e) {
-  var sheet = e.source.getActiveSheet();
-  var range = e.range;
-
-  if (sheet.getName() === "Control" && range.getColumn() === 3) {
-    var status = range.getValue().toString().toUpperCase().trim();
-    if (status === "SOS" || status === "PENDING") {
-      var row = range.getRow();
-      var empId = sheet.getRange(row, 1).getValue().toString().trim();
-      var cmd = (status === "SOS") ? "SOS" : sheet.getRange(row, 2).getValue().toString().trim();
-      var msg = sheet.getRange(row, 4).getValue().toString() || "تنبيه إداري";
-
-      var token = getLastToken(empId);
-      if (token) {
-        sendPush(token, cmd, msg);
-        sheet.getRange(row, 3).setValue("SENT ✅");
-      } else {
-        sheet.getRange(row, 3).setValue("ERR: NO TOKEN");
-      }
+async function render(){
+  const parts = (location.hash || "#/").slice(2).split("/");
+  view.innerHTML = '<p class="empty"><span class="spin"></span></p>';
+  $("#who").textContent = EMP ? EMP.name : "";
+  try{
+    if(!EMP){
+      if(parts[0] === "login") return unlockView();
+      return publicFlow();
     }
+    if(parts[0] === "c")        return await caseView(parts[1], parts[2]);
+    if(parts[0] === "tag")      return tagView();
+    if(parts[0] === "done")     return await doneView(parts[1], parts[2]);
+    if(parts[0] === "new")      return await newClampView();
+    if(parts[0] === "find")     return findView();
+    return await homeView();
+  }catch(e){
+    view.innerHTML = `<h1>تعذّر التحميل</h1><p class="sub">${esc(e.message)}</p>
+      <button onclick="render()">إعادة المحاولة</button>`;
   }
 }
 
-/** دالة البحث عن عنوان الساعة */
-function getLastToken(id) {
-  var rows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Log").getDataRange().getValues();
-  for (var i = rows.length - 1; i >= 1; i--) {
-    if (rows[i][1].toString().trim().toUpperCase() === id.toUpperCase() && rows[i][8]) return rows[i][8];
+/* ============ تسجيل الموظف ============ */
+function unlockView(){
+  view.innerHTML = `
+    <h1>تسجيل الدخول</h1>
+    <p class="sub">للموظفين المصرّح لهم بتركيب وفك الكلابش.</p>
+    <div class="card">
+      <label for="n">الاسم</label><input id="n" autocomplete="name">
+      <label for="p">رمز الدخول</label><input id="p" type="password" inputmode="numeric">
+      <div style="margin-top:16px"><button class="primary" onclick="doUnlock()">دخول</button></div>
+      <p class="err" id="e"></p>
+    </div>`;
+}
+window.doUnlock = async function(){
+  const name = $("#n").value.trim(), code = $("#p").value.trim();
+  if(!name || !code){ $("#e").textContent = "أكمل الاسم والرمز."; return; }
+  try{
+    await api("unlock", {name, code});
+    EMP = {name, code}; store.set("emp", EMP); go("#/");  render();
+  }catch(err){ $("#e").textContent = err.message; }
+};
+window.signOut = function(){ store.del("emp"); EMP = null; go("#/"); render(); };
+
+/* ============ الرئيسية ============ */
+async function homeView(){
+  const d = await api("list", {});
+  const open = d.cases.filter(c => c.status === "locked");
+  const over = open.filter(c => (Date.now()-new Date(c.clampAt))/60000 > SLA_MIN).length;
+  view.innerHTML = `
+    <h1>الحالات المفتوحة</h1>
+    <p class="sub">كلبشة مركّبة بانتظار الفك.</p>
+    <div class="stats">
+      <div class="stat"><div class="k">مركّبة الآن</div><div class="v">${open.length}</div></div>
+      <div class="stat"><div class="k">كلابش متاحة</div><div class="v">${d.available}</div></div>
+    </div>
+    ${over ? `<div class="note">${over} حالة تجاوزت ${SLA_MIN/60} ساعة بدون فك.</div>` : ""}
+    ${QUEUE.length ? `<div class="note">${QUEUE.length} عملية بانتظار الإرسال. <button class="quiet" onclick="flushQueue()">إرسال الآن</button></div>` : ""}
+    <div class="list">${ open.length ? open.map(c => {
+      const late = (Date.now()-new Date(c.clampAt))/60000 > SLA_MIN;
+      return `<a href="#/c/${c.id}/${c.token}"><div class="item">
+        <div class="grow">
+          <div class="plate">${esc(c.plate)}</div>
+          <div class="meta">${esc(c.location)} · كلبشة ${esc(c.clampNo)}</div>
+        </div>
+        <div class="age ${late?"over":""}">${since(c.clampAt)}</div>
+      </div></a>`; }).join("") : `<p class="empty">لا توجد كلابش مركّبة الآن.</p>` }</div>
+    <h2>غير ذلك</h2>
+    <div class="two" style="margin-top:0">
+      <button onclick="go('#/find')">بحث برقم اللوحة</button>
+      <button onclick="go('#/tag')">الملصق الموحّد</button>
+    </div>
+    <button class="quiet" style="margin-top:14px" onclick="signOut()">تسجيل الخروج</button>
+    <div class="bar"><div class="in"><button class="danger" onclick="go('#/new')">تركيب كلبشة</button></div></div>`;
+}
+
+/* ============ تركيب كلبشة ============ */
+async function newClampView(){
+  const d = await api("clamps", {});
+  PHOTOS = {};
+  view.innerHTML = `
+    <h1>تركيب كلبشة</h1>
+    <p class="sub">تُفتح الحالة فوراً ويُطبع لها ملصق برمز QR.</p>
+    <div class="card">
+      <label>رقم اللوحة</label>
+      ${plateBox()}
+      <label for="loc">الموقع</label>
+      <input id="loc" placeholder="موقف المبنى الرئيسي — B12">
+      <label for="v">نوع المخالفة</label>
+      <select id="v">${VIOLATIONS.map(v => `<option>${v}</option>`).join("")}</select>
+      <label for="cn">رقم الكلبشة</label>
+      <select id="cn">${d.available.length ? d.available.map(n => `<option>${esc(n)}</option>`).join("") : `<option value="">لا توجد كلابش متاحة</option>`}</select>
+      <label>صورة السيارة والكلبشة</label>
+      ${photoField("ph1","إضافة صورة")}
+      <p class="err" id="e"></p>
+    </div>
+    <div class="bar"><div class="in"><button class="danger" id="save" onclick="saveClamp()">تثبيت الحالة</button></div></div>`;
+  plateBind();
+  navigator.geolocation && navigator.geolocation.getCurrentPosition(p => { window.GEO = [p.coords.latitude, p.coords.longitude]; }, ()=>{}, {timeout:8000});
+}
+window.saveClamp = async function(){
+  const pv = plateValue();
+  if(!pv.ok){ $("#e").textContent = "أكمل ٣ حروف وأرقام اللوحة."; return; }
+  const plate = pv.text;
+  if(!PHOTOS.ph1){ $("#e").textContent = "أضف صورة قبل التثبيت."; return; }
+  const body = {
+    plate, location:$("#loc").value.trim(), violation:$("#v").value,
+    clampNo:$("#cn").value, photo:PHOTOS.ph1, geo:window.GEO || null, clampAt:new Date().toISOString()
+  };
+  const b = $("#save"); b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+  try{
+    const c = await api("clamp", body);
+    go("#/done/" + c.id + "/" + c.token);
+  }catch(e){
+    queueUp("clamp", body);
+    b.disabled = false; b.textContent = "تثبيت الحالة";
+    $("#e").textContent = "لا يوجد اتصال — حُفظت محلياً وسترسل تلقائياً. أكمل الفك يدوياً.";
   }
-  return null;
+};
+
+/* ============ الملصق الموحّد ============ */
+function tagView(){
+  view.innerHTML = `
+    <h1 class="noprint">الملصق الموحّد</h1>
+    <p class="sub noprint">اطبعه مرة واحدة والصقه على كل كلبشة — نفس الرمز لكل الحالات.</p>
+    <div class="sticker">
+      <div style="font-size:15px">مركبة مكلبشة — إدارة أمن المواقف</div>
+      <div class="big">لفك الكلبشة</div>
+      <div class="qr" id="qr"></div>
+      <div style="font-size:15px;margin-top:8px">امسح الرمز وأدخل رقم لوحتك</div>
+      <div style="font-size:13px;color:#5A625F;margin-top:4px">أو راجع بوابة الأمن الرئيسية</div>
+    </div>
+    <div class="two noprint">
+      <button onclick="print()">طباعة</button>
+      <button onclick="go('#/')">رجوع للرئيسية</button>
+    </div>
+    <p class="sub noprint" style="margin-top:14px;word-break:break-all">الرابط المطبوع: ${esc(APP_URL)}</p>`;
+  const url = APP_URL;
+  try{ new QRCode(document.getElementById("qr"), {text:url, width:200, height:200, correctLevel:QRCode.CorrectLevel.M}); }
+  catch(e){ document.getElementById("qr").textContent = url; }
 }
 
-/** محرك الإرسال الفوري */
-function sendPush(t, c, m) {
-  const acc = getAcc();
-  const url = `https://fcm.googleapis.com/v1/projects/${SERVICE_ACCOUNT.project_id}/messages:send`;
-  const pay = { "message": { "token": t, "data": { "command": c, "message": m } } };
-  UrlFetchApp.fetch(url, { "method": "post", "contentType": "application/json", "headers": { "Authorization": "Bearer " + acc }, "payload": JSON.stringify(pay) });
+async function doneView(id, token){
+  const c = await api("case", {id, token, full:true});
+  view.innerHTML = `
+    <h1>ثُبّتت الحالة</h1>
+    <div class="card">
+      <div class="rowtop"><span class="caseno">حالة رقم ${esc(c.id)}</span>
+        <span class="state locked">مركّبة</span></div>
+      <dl>
+        <dt>اللوحة</dt><dd class="plate">${esc(c.plate)}</dd>
+        <dt>الموقع</dt><dd>${esc(c.location)}</dd>
+        <dt>الكلبشة</dt><dd>${esc(c.clampNo)}</dd>
+      </dl>
+      <p style="margin:14px 0 0;font-size:14px;color:var(--ink-2)">تأكد أن ملصق الرمز على الكلبشة واضح للسائق.</p>
+    </div>
+    <div class="two">
+      <button onclick="go('#/new')">تركيب أخرى</button>
+      <button class="primary" onclick="go('#/')">الرئيسية</button>
+    </div>`;
 }
 
-function getAcc() {
-  const h = Utilities.base64EncodeWebSafe(JSON.stringify({ "alg": "RS256", "typ": "JWT" }));
-  const n = Math.floor(Date.now() / 1000);
-  const c = Utilities.base64EncodeWebSafe(JSON.stringify({ "iss": SERVICE_ACCOUNT.client_email, "scope": "https://www.googleapis.com/auth/firebase.messaging", "aud": "https://oauth2.googleapis.com/token", "exp": n + 3600, "iat": n }));
-  const s = Utilities.base64EncodeWebSafe(Utilities.computeRsaSha256Signature(h + "." + c, SERVICE_ACCOUNT.private_key));
-  return JSON.parse(UrlFetchApp.fetch("https://oauth2.googleapis.com/token", { "method": "post", "payload": { "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": h + "." + c + "." + s } }).getContentText()).access_token;
-}
+/* ============ صفحة الحالة ============ */
+async function caseView(id, token){
+  const c = await api("case", {id, token, full:true});
+  const freed = c.status === "released";
+  const head = `
+    <div class="rowtop">
+      <span class="caseno">حالة رقم ${esc(c.id)}</span>
+      <span class="state ${freed?"freed":"locked"}">${freed?"مفكوكة":"مركّبة"}</span>
+    </div>`;
 
-// ============================================================
-// الإضافات التالية فقط جديدة بالكامل — ولا تُعدّل أي سطر مما فوق.
-// أُضيفت لأن السكربت الأصلي لا يحتوي على doGet إطلاقاً، فتعذّر على
-// لوحة التحكم قراءة أي بيانات منه رغم عمل doPost وonEditTrigger بشكل طبيعي.
-// ============================================================
+  const facts = `
+    <dl>
+      <dt>اللوحة</dt><dd class="plate">${esc(c.plate)}</dd>
+      <dt>الموقع</dt><dd>${esc(c.location)}</dd>
+      <dt>المخالفة</dt><dd>${esc(c.violation)}</dd>
+      <dt>وقت التركيب</dt><dd>${clock(c.clampAt)}</dd>
+      ${freed
+        ? `<dt>وقت الفك</dt><dd>${clock(c.releaseAt)}</dd><dt>المدة</dt><dd>${esc(c.duration)}</dd>`
+        : `<dt>المدة حتى الآن</dt><dd>${since(c.clampAt)}</dd>`}
+    </dl>`;
 
-/** 4. قراءة البيانات لعرضها في لوحة التحكم (GET) */
-function doGet(e) {
-  try {
-    var timestamp = new Date();
-    var action = e.parameter.action;
-    var empId = e.parameter.emp_id;
-
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Log");
-    if (!sheet) {
-      return ContentService.createTextOutput(JSON.stringify([]))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (action === "resolve" && empId) {
-      closeOpenIncident_(empId.toString(), timestamp, (e.parameter.resolved_by || "").toString());
-      return handleResolveLog(sheet, empId.toString(), timestamp);
-    }
-
-    if (action === "send_message" && empId) {
-      return handleSendMessageFromDashboard(empId.toString(), e.parameter.command, e.parameter.message);
-    }
-
-    if (action === "update_employee" && empId) {
-      return handleUpdateEmployeeFromDashboard(empId.toString(), e.parameter);
-    }
-
-    if (action === "incidents") {
-      return handleGetIncidents(empId ? empId.toString() : null);
-    }
-
-    var rows = sheet.getDataRange().getValues();
-    if (rows.length <= 1) {
-      return ContentService.createTextOutput(JSON.stringify([]))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    // بناء خريطة بيانات الموظف والملف الصحي من شيت "Employees" (إن وُجد) مرة واحدة فقط
-    // بدل قراءته داخل كل تكرار من الحلقة أدناه.
-    var employeesMap = buildEmployeesMap_();
-
-    var latestByEmp = {};
-    for (var i = rows.length - 1; i >= 1; i--) {
-      var row = rows[i];
-      var id = (row[1] || "").toString().trim();
-      if (!id || latestByEmp[id]) continue;
-
-      var locationParts = (row[2] || "").toString().split(",");
-      var lat = parseFloat(locationParts[0]);
-      var lng = parseFloat(locationParts[1]);
-
-      var empInfo = employeesMap[id.toUpperCase()] || null;
-
-      latestByEmp[id] = {
-        timestamp: (row[0] instanceof Date) ? row[0].toISOString() : row[0].toString(),
-        emp_id: id,
-        emp_name: (empInfo && empInfo.full_name) ? empInfo.full_name : ("موظف #" + id),
-        lat: isNaN(lat) ? 24.7136 : lat,
-        lng: isNaN(lng) ? 46.6753 : lng,
-        heart_rate: parseInt(row[3]) || 0,
-        spo2: (row[4] || "98%").toString(),
-        temperature: (row[5] !== undefined && row[5] !== "") ? (row[5].toString() + "°C") : "37.0°C",
-        battery: (row[6] || "100%").toString(),
-        status: (row[7] || "NORMAL").toString().toUpperCase(),
-        fcm_token: (row[8] || "").toString(),
-        // بيانات الملف الصحي - من شيت "Employees"
-        blood_type: empInfo ? empInfo.blood_type : "",
-        chronic_conditions: empInfo ? empInfo.chronic_conditions : "",
-        allergies: empInfo ? empInfo.allergies : "",
-        medications: empInfo ? empInfo.medications : "",
-        emergency_contact_name: empInfo ? empInfo.emergency_contact_name : "",
-        emergency_contact_phone: empInfo ? empInfo.emergency_contact_phone : "",
-        health_notes: empInfo ? empInfo.notes : "",
-        health_updated_at: empInfo ? empInfo.updated_at : ""
-      };
-
-      if (latestByEmp[id].status === "SOS") {
-        ensureOpenIncident_(id, latestByEmp[id].emp_name, (row[0] instanceof Date) ? row[0] : new Date(row[0]));
-      }
-    }
-
-    var data = Object.keys(latestByEmp).map(function (id) { return latestByEmp[id]; });
-
-    return ContentService.createTextOutput(JSON.stringify(data))
-      .setMimeType(ContentService.MimeType.JSON);
-
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({ "result": "error", "message": error.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-/** 5. إنهاء حالة الطوارئ من زر لوحة التحكم (يضيف سطر NORMAL جديد بنفس آخر بيانات معروفة) */
-function handleResolveLog(sheet, empId, timestamp) {
-  var cleanId = empId.toString().trim();
-
-  var lastLat = 24.7136, lastLng = 46.6753, lastHr = 75, lastSpo2 = "98%", lastTemp = "36.6", lastBattery = "100%", lastToken = "";
-
-  var rows = sheet.getDataRange().getValues();
-  for (var i = rows.length - 1; i >= 1; i--) {
-    var row = rows[i];
-    if ((row[1] || "").toString().trim() !== cleanId) continue;
-
-    var parts = (row[2] || "").toString().split(",");
-    if (parts.length === 2) {
-      var la = parseFloat(parts[0]), ln = parseFloat(parts[1]);
-      if (!isNaN(la) && !isNaN(ln)) { lastLat = la; lastLng = ln; }
-    }
-    if (row[3]) lastHr = row[3];
-    if (row[4]) lastSpo2 = row[4];
-    if (row[5] !== undefined && row[5] !== "") lastTemp = row[5];
-    if (row[6]) lastBattery = row[6];
-    if (row[8]) lastToken = row[8];
-    break;
+  /* — عرض الموظف — */
+  if(freed){
+    view.innerHTML = `
+      <h1>حالة مغلقة</h1>
+      <div class="card">${head}${facts}
+        <dl style="margin-top:10px">
+          <dt>المخالف</dt><dd>${esc(c.violatorName)}</dd>
+          <dt>الهوية</dt><dd>${esc(c.violatorId)}</dd>
+          <dt>فكّها</dt><dd>${esc(c.releaseBy)}</dd>
+        </dl>
+      </div>
+      <button style="margin-top:12px" onclick="go('#/')">رجوع للرئيسية</button>`;
+    return;
   }
 
-  sheet.appendRow([timestamp, cleanId, lastLat + "," + lastLng, lastHr, lastSpo2, lastTemp, lastBattery, "NORMAL", lastToken]);
-
-  return ContentService.createTextOutput(JSON.stringify({ "result": "success", "message": "تم إنهاء حالة الطوارئ لـ " + cleanId }))
-    .setMimeType(ContentService.MimeType.JSON);
+  PHOTOS = {};
+  view.innerHTML = `
+    <h1>فك الكلبشة</h1>
+    <div class="card">${head}${facts}
+      ${c.repeat > 1 ? `<div class="note" style="margin-bottom:0">تكرار رقم ${c.repeat} لهذه اللوحة خلال ٩٠ يوماً — طبّق إجراء التصعيد.</div>` : ""}
+      ${c.requestedAt ? `<div class="note" style="margin-bottom:0">طلب المخالف الفك ${since(c.requestedAt)} — جواله ${esc(c.violatorPhone)}</div>` : ""}
+    </div>
+    <div class="card">
+      <label for="vn">اسم المخالف</label><input id="vn" autocomplete="name">
+      <label for="vi">الرقم الوظيفي أو الهوية</label><input id="vi" inputmode="numeric">
+      <label for="vp">رقم الجوال</label><input id="vp" type="tel" inputmode="tel" value="${esc(c.violatorPhone||"")}" placeholder="05XXXXXXXX">
+      <label for="nt">ملاحظات</label><textarea id="nt" rows="2"></textarea>
+      <label>صورة السيارة بعد الفك</label>
+      ${photoField("ph2","إضافة صورة")}
+      <label style="display:flex;justify-content:space-between;align-items:center">توقيع المخالف <button class="quiet" style="width:auto" onclick="clearSig()">مسح</button></label>
+      <canvas id="sig"></canvas>
+      <p class="err" id="e"></p>
+    </div>
+    <div class="bar"><div class="in"><button class="go" id="rel" onclick="doRelease('${id}','${token}')">تأكيد الفك</button></div></div>`;
+  signPad();
 }
 
-/** 6. إرسال رسالة/أمر لجهاز الموظف من زر لوحة التحكم — يعيد استخدام getLastToken وsendPush الأصليتين كما هما */
-function handleSendMessageFromDashboard(empId, command, message) {
-  var cleanId = empId.toString().trim();
-  var token = getLastToken(cleanId);
+/* ============ مسار السائق — نقطة دخول موحّدة ============ */
+function publicFlow(){
+  view.innerHTML = `
+    <h1>فك كلبشة المواقف</h1>
+    <p class="sub">إدارة أمن المواقف — الخدمة الذاتية</p>
+    <div class="card">
+      <p style="margin:0 0 4px;font-size:15px">أدخل رقم لوحة سيارتك.</p>
+      <p style="margin:0;font-size:14px;color:var(--ink-2)">نجيب لك حالة الكلبشة المسجّلة على اللوحة ونوصل طلبك للمناوب.</p>
+      <label>رقم اللوحة</label>
+      ${plateBox()}
+      <div style="margin-top:16px"><button class="primary" id="ck" onclick="checkPlate()">متابعة</button></div>
+      <p class="err" id="e"></p>
+    </div>
+    <button class="quiet" style="margin-top:14px" onclick="go('#/login')">أنا موظف أمن</button>`;
+  plateBind();
+}
 
-  if (!token) {
-    return ContentService.createTextOutput(JSON.stringify({ "result": "error", "message": "لا يوجد توكن جهاز مسجل بعد لهذا الموظف" }))
-      .setMimeType(ContentService.MimeType.JSON);
+window.checkPlate = async function(){
+  const p = plateValue();
+  if(!p.ok){ $("#e").textContent = "أكمل ٣ حروف وأرقام اللوحة."; return; }
+  const plate = p.text;
+  const b = $("#ck"); b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+  try{
+    const c = await api("lookup", {plate});
+    publicCase(c, plate);
+  }catch(err){
+    b.disabled = false; b.textContent = "متابعة";
+    $("#e").textContent = err.message;
   }
+};
 
-  try {
-    sendPush(token, (command || "ALERT").toString().toUpperCase(), (message || "").toString());
-    return ContentService.createTextOutput(JSON.stringify({ "result": "success", "message": "تم إرسال الرسالة بنجاح" }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ "result": "error", "message": err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+function publicCase(c, plate){
+  view.innerHTML = `
+    <h1>تفاصيل المخالفة</h1>
+    <div class="card">
+      <div class="rowtop"><span class="caseno">حالة رقم ${esc(c.id)}</span>
+        <span class="state locked">مركّبة</span></div>
+      <dl>
+        <dt>اللوحة</dt><dd class="plate">${esc(c.plate)}</dd>
+        <dt>الموقع</dt><dd>${esc(c.location)}</dd>
+        <dt>المخالفة</dt><dd>${esc(c.violation)}</dd>
+        <dt>وقت التركيب</dt><dd>${clock(c.clampAt)}</dd>
+        <dt>المدة حتى الآن</dt><dd>${since(c.clampAt)}</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <p style="margin:0 0 4px;font-size:15px">اطلب حضور المناوب لفك الكلبشة.</p>
+      <p style="margin:0;font-size:14px;color:var(--ink-2)">يصله إشعار فوري بموقع سيارتك، وستصلك رسالة عند إغلاق الحالة.</p>
+      <label for="ph">رقم جوالك</label>
+      <input id="ph" type="tel" inputmode="tel" placeholder="05XXXXXXXX">
+      <div style="margin-top:16px"><button class="primary" id="rq" onclick="askRelease('${c.id}','${esc(plate)}')">طلب فك الكلبشة</button></div>
+      <p class="err" id="e"></p>
+    </div>
+    <button class="quiet" style="margin-top:14px" onclick="render()">لوحة أخرى</button>`;
+}
+
+window.askRelease = async function(id, plate){
+  const phone = $("#ph").value.trim();
+  if(phone.length < 9){ $("#e").textContent = "أدخل رقم جوال صحيح."; return; }
+  const b = $("#rq"); b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+  try{
+    await api("request", {id, plate, phone});
+    view.innerHTML = `
+      <h1>وصل طلبك</h1>
+      <div class="card">
+        <div class="rowtop"><span class="caseno">حالة رقم ${esc(id)}</span>
+          <span class="state warn">بانتظار المناوب</span></div>
+        <p style="margin:0 0 6px;font-size:15px">أُرسل إشعار للمناوب بموقع سيارتك الآن.</p>
+        <p style="margin:0;font-size:14px;color:var(--ink-2)">ابقَ قرب المركبة. عند الفك ستصلك رسالة واتساب على ${esc(phone)} مرفق بها نموذج التعهد.</p>
+      </div>`;
+  }catch(e){ b.disabled = false; b.textContent = "طلب فك الكلبشة"; $("#e").textContent = e.message; }
+};
+
+window.doRelease = async function(id, token){
+  const name = $("#vn").value.trim(), vid = $("#vi").value.trim(), sig = $("#sig");
+  if(!name || !vid){ $("#e").textContent = "أكمل اسم المخالف ورقم الهوية."; return; }
+  if(!sig.dataset.drawn){ $("#e").textContent = "التوقيع مطلوب قبل الفك."; return; }
+  const body = {
+    id, token, violatorName:name, violatorId:vid, violatorPhone:$("#vp").value.trim(),
+    notes:$("#nt").value.trim(), signature:sig.toDataURL("image/png"),
+    photo:PHOTOS.ph2 || null, releaseAt:new Date().toISOString()
+  };
+  const b = $("#rel"); b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+  try{
+    await api("release", body);
+    go("#/"); render();
+  }catch(e){
+    queueUp("release", body);
+    $("#e").textContent = "لا يوجد اتصال — حُفظ الفك محلياً وسيُرسل تلقائياً.";
+    b.disabled = false; b.textContent = "تأكيد الفك";
   }
+};
+
+/* ============ البحث ============ */
+function findView(){
+  view.innerHTML = `
+    <h1>بحث برقم اللوحة</h1>
+    <p class="sub">استخدمه إذا كان الملصق تالفاً أو مفقوداً.</p>
+    <div class="card">
+      <label for="q">رقم اللوحة</label>
+      <input id="q" placeholder="أ ب ج ١٢٣٤" onkeydown="if(event.key==='Enter')doFind()">
+      <div style="margin-top:14px"><button class="primary" onclick="doFind()">بحث</button></div>
+    </div>
+    <div id="res"></div>
+    <button class="quiet" style="margin-top:14px" onclick="go('#/')">رجوع</button>`;
 }
+window.doFind = async function(){
+  const q = $("#q").value.trim(); if(!q) return;
+  $("#res").innerHTML = '<p class="empty"><span class="spin"></span></p>';
+  const d = await api("find", {plate:q});
+  $("#res").innerHTML = d.cases.length ? `<h2>${d.cases.length} نتيجة</h2><div class="list">` + d.cases.map(c =>
+    `<a href="#/c/${c.id}/${c.token}"><div class="item">
+      <div class="grow"><div class="plate">${esc(c.plate)}</div>
+        <div class="meta">${esc(c.id)} · ${clock(c.clampAt)}</div></div>
+      <span class="state ${c.status==="released"?"freed":"locked"}">${c.status==="released"?"مفكوكة":"مركّبة"}</span>
+    </div></a>`).join("") + "</div>" : `<p class="empty">لا توجد حالات لهذه اللوحة.</p>`;
+};
 
-// ============================================================
-// الإضافات التالية جديدة بالكامل: شيت بيانات الموظف والملف الصحي
-// لا تمسّ أي دالة مما فوق (فقط doGet تم تعديله لإضافة سطر lookup
-// ودمج بيانات هذا الشيت الجديد ضمن كل موظف).
-// ============================================================
-
-var EMPLOYEES_SHEET_NAME_ = "Employees";
-var EMPLOYEES_HEADERS_ = [
-  "المعرف الوظيفي",
-  "الاسم الكامل",
-  "فصيلة الدم",
-  "الحالات المرضية المزمنة",
-  "الحساسية",
-  "الأدوية الحالية",
-  "جهة اتصال الطوارئ - الاسم",
-  "جهة اتصال الطوارئ - الجوال",
-  "ملاحظات صحية إضافية",
-  "آخر تحديث"
-];
-
-/**
- * يعيد شيت "Employees"، وينشئه بالترويسة الصحيحة إن لم يكن موجوداً.
- * ملاحظة: هذه الدالة تُستدعى أيضاً من doGet (بدون واجهة مستخدم)،
- * لذلك لا تستخدم SpreadsheetApp.getUi() هنا إطلاقاً.
- */
-function getOrCreateEmployeesSheet_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(EMPLOYEES_SHEET_NAME_);
-  if (!sheet) {
-    sheet = ss.insertSheet(EMPLOYEES_SHEET_NAME_);
-    sheet.appendRow(EMPLOYEES_HEADERS_);
-    sheet.getRange(1, 1, 1, EMPLOYEES_HEADERS_.length).setBackground("#7C3AED").setFontColor("white").setFontWeight("bold");
-    sheet.setFrozenRows(1);
-  }
-  return sheet;
-}
-
-/**
- * شغّل هذه الدالة يدوياً من محرر Apps Script (مرة واحدة) لإنشاء شيت
- * "Employees" وإظهار رسالة تأكيد. لا تُستدعى من doGet أو doPost.
- */
-function setupEmployeesSheetManually() {
-  getOrCreateEmployeesSheet_();
-  SpreadsheetApp.getUi().alert("✅ تم إنشاء/التحقق من شيت \"Employees\" لبيانات الموظف والملف الصحي.");
-}
-
-/**
- * يقرأ شيت Employees كامل مرة واحدة ويرجعه ككائن مفهرس بالمعرف الوظيفي
- * (بأحرف كبيرة موحّدة) لتسريع الدمج داخل doGet بدل البحث صفاً صفاً.
- */
-function buildEmployeesMap_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(EMPLOYEES_SHEET_NAME_);
-  var map = {};
-  if (!sheet) return map;
-
-  var rows = sheet.getDataRange().getValues();
-  for (var i = 1; i < rows.length; i++) {
-    var r = rows[i];
-    var id = (r[0] || "").toString().trim();
-    if (!id) continue;
-    map[id.toUpperCase()] = {
-      full_name: (r[1] || "").toString(),
-      blood_type: (r[2] || "").toString(),
-      chronic_conditions: (r[3] || "").toString(),
-      allergies: (r[4] || "").toString(),
-      medications: (r[5] || "").toString(),
-      emergency_contact_name: (r[6] || "").toString(),
-      emergency_contact_phone: (r[7] || "").toString(),
-      notes: (r[8] || "").toString(),
-      updated_at: (r[9] instanceof Date) ? r[9].toISOString() : (r[9] || "").toString()
-    };
-  }
-  return map;
-}
-
-/**
- * 7. حفظ/تحديث بيانات الموظف والملف الصحي من نموذج لوحة التحكم
- * (يُستدعى من doGet عبر action=update_employee). يبحث عن صف الموظف
- * بمعرفه الوظيفي؛ يحدّثه إن وُجد أو يضيف صفاً جديداً إن لم يوجد.
- */
-function handleUpdateEmployeeFromDashboard(empId, params) {
-  try {
-    var sheet = getOrCreateEmployeesSheet_();
-    var cleanId = empId.toString().trim();
-
-    var rows = sheet.getDataRange().getValues();
-    var rowIndex = -1;
-    for (var i = 1; i < rows.length; i++) {
-      if ((rows[i][0] || "").toString().trim().toUpperCase() === cleanId.toUpperCase()) { rowIndex = i + 1; break; }
-    }
-
-    var record = [
-      cleanId,
-      (params.emp_name || "").toString(),
-      (params.blood_type || "").toString(),
-      (params.chronic_conditions || "").toString(),
-      (params.allergies || "").toString(),
-      (params.medications || "").toString(),
-      (params.emergency_contact_name || "").toString(),
-      (params.emergency_contact_phone || "").toString(),
-      (params.notes || "").toString(),
-      new Date()
-    ];
-
-    if (rowIndex > 0) {
-      sheet.getRange(rowIndex, 1, 1, record.length).setValues([record]);
-    } else {
-      sheet.appendRow(record);
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ "result": "success", "message": "تم حفظ بيانات الموظف والملف الصحي بنجاح" }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ "result": "error", "message": err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-// ============================================================
-// الإضافات التالية جديدة بالكامل: سجل دائم لحوادث الاستغاثة (Incidents)
-// لا تمسّ أي دالة مما فوق. الهدف: أرشفة كل حادثة SOS بشيت دائم بدل
-// الاعتماد على activityLog المؤقت بالمتصفح فقط (يضيع عند تحديث الصفحة)،
-// لأجل تقارير سلامة حقيقية (عدد الحوادث، متوسط زمن الاستجابة، من أغلقها).
-// ============================================================
-
-var INCIDENTS_SHEET_NAME_ = "Incidents";
-var INCIDENTS_HEADERS_ = [
-  "معرف الحادثة",
-  "المعرف الوظيفي",
-  "اسم الموظف",
-  "وقت البدء",
-  "وقت الحل",
-  "المدة (دقيقة)",
-  "تم الحل بواسطة",
-  "الحالة"
-];
-
-/**
- * يعيد شيت "Incidents"، وينشئه بالترويسة الصحيحة إن لم يكن موجوداً.
- * تُستدعى أيضاً من doGet (بدون واجهة مستخدم) لذلك لا تستخدم
- * SpreadsheetApp.getUi() هنا إطلاقاً.
- */
-function getOrCreateIncidentsSheet_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(INCIDENTS_SHEET_NAME_);
-  if (!sheet) {
-    sheet = ss.insertSheet(INCIDENTS_SHEET_NAME_);
-    sheet.appendRow(INCIDENTS_HEADERS_);
-    sheet.getRange(1, 1, 1, INCIDENTS_HEADERS_.length).setBackground("#7C3AED").setFontColor("white").setFontWeight("bold");
-    sheet.setFrozenRows(1);
-  }
-  return sheet;
-}
-
-/**
- * شغّل هذه الدالة يدوياً من محرر Apps Script (مرة واحدة) لإنشاء شيت
- * "Incidents" وإظهار رسالة تأكيد. لا تُستدعى من doGet أو doPost.
- */
-function setupIncidentsSheetManually() {
-  getOrCreateIncidentsSheet_();
-  SpreadsheetApp.getUi().alert("✅ تم إنشاء/التحقق من شيت \"Incidents\" لسجل حوادث الطوارئ.");
-}
-
-/**
- * تُستدعى من doGet لكل موظف حالته SOS حالياً. تفتح حادثة جديدة فقط إن لم
- * توجد حادثة مفتوحة (OPEN) لنفس الموظف بعد — بهذا تبقى آمنة للاستدعاء
- * المتكرر من كل طلب doGet (كل 15 ثانية من كل جهاز يفتح اللوحة) دون تكرار.
- */
-function ensureOpenIncident_(empId, empName, startTimestamp) {
-  var sheet = getOrCreateIncidentsSheet_();
-  var cleanId = empId.toString().trim();
-  var rows = sheet.getDataRange().getValues();
-  for (var i = 1; i < rows.length; i++) {
-    var rowEmpId = (rows[i][1] || "").toString().trim();
-    if (rowEmpId.toUpperCase() === cleanId.toUpperCase() && rows[i][7] === "OPEN") return;
-  }
-  var incidentId = Utilities.getUuid();
-  sheet.appendRow([incidentId, cleanId, empName || "", startTimestamp, "", "", "", "OPEN"]);
-}
-
-/**
- * تُستدعى من فرع action=resolve بـ doGet لإغلاق الحادثة المفتوحة المطابقة
- * وحساب مدتها بالدقائق وتسجيل اسم من أغلقها (اختياري من لوحة التحكم).
- */
-function closeOpenIncident_(empId, endTimestamp, resolvedBy) {
-  var sheet = getOrCreateIncidentsSheet_();
-  var cleanId = empId.toString().trim();
-  var rows = sheet.getDataRange().getValues();
-  for (var i = 1; i < rows.length; i++) {
-    var rowEmpId = (rows[i][1] || "").toString().trim();
-    if (rowEmpId.toUpperCase() === cleanId.toUpperCase() && rows[i][7] === "OPEN") {
-      var startValue = rows[i][3];
-      var startDate = (startValue instanceof Date) ? startValue : new Date(startValue);
-      var durationMin = "";
-      if (!isNaN(startDate.getTime())) {
-        durationMin = Math.max(0, Math.round((endTimestamp.getTime() - startDate.getTime()) / 60000));
-      }
-      sheet.getRange(i + 1, 5, 1, 4).setValues([[endTimestamp, durationMin, resolvedBy || "", "RESOLVED"]]);
-      return;
-    }
-  }
-}
-
-/**
- * 8. إرجاع سجل الحوادث (كامل أو لموظف واحد إن مرّرت emp_id) للوحة التحكم.
- */
-function handleGetIncidents(empId) {
-  try {
-    var sheet = getOrCreateIncidentsSheet_();
-    var rows = sheet.getDataRange().getValues();
-    var list = [];
-    for (var i = rows.length - 1; i >= 1; i--) {
-      var r = rows[i];
-      var rowEmpId = (r[1] || "").toString().trim();
-      if (empId && rowEmpId.toUpperCase() !== empId.toUpperCase()) continue;
-      list.push({
-        incident_id: r[0],
-        emp_id: rowEmpId,
-        emp_name: r[2],
-        start_time: (r[3] instanceof Date) ? r[3].toISOString() : (r[3] || "").toString(),
-        end_time: (r[4] instanceof Date) ? r[4].toISOString() : (r[4] || "").toString(),
-        duration_minutes: r[5],
-        resolved_by: r[6],
-        status: r[7]
-      });
-      if (list.length >= 50) break;
-    }
-    return ContentService.createTextOutput(JSON.stringify({ "result": "success", "incidents": list }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ "result": "error", "message": err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
+flushQueue();
+render();
+</script>
+</body>
+</html>
