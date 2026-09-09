@@ -112,6 +112,16 @@ input[type=file]{display:none}
 .qr{background:#fff;padding:14px;border-radius:var(--r);display:flex;justify-content:center}
 .sticker{background:#fff;border:2px solid var(--ink);border-radius:12px;padding:20px;text-align:center}
 .sticker .big{font-size:26px;font-weight:600;margin:10px 0 4px}
+.tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:4px;margin:14px 0}
+.tabs button{min-height:auto;padding:9px;border:0;background:transparent;color:var(--ink-2);font-size:14px}
+.tabs button.on{background:var(--act);color:#fff}
+.bars{margin:0}
+.brow{margin-bottom:10px}
+.blab{display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px;gap:10px}
+.blab span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btrk{height:7px;background:var(--paper);border-radius:4px;overflow:hidden}
+.bfil{height:100%;background:var(--act);border-radius:4px}
+.hist{font-size:14px;border-top:1px solid var(--line);padding:9px 0;display:flex;justify-content:space-between;gap:10px}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--act);border-radius:50%;animation:s .7s linear infinite;vertical-align:-3px}
 @keyframes s{to{transform:rotate(360deg)}}
 @media print{header,.bar,.noprint{display:none}body{background:#fff}}
@@ -131,7 +141,7 @@ input[type=file]{display:none}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 /* ============ الإعدادات ============ */
-const API = "https://script.google.com/macros/s/AKfycbz0CDG0OT-R82g4P_Xzd4R_DDV2OqcJ5h0c3CiqR69WrRFKYfS2HfDq5nRrJ6MVSQrQww/exec";   // يُستخدم فقط عند الاستضافة الخارجية: .../exec
+const API = "ضع_هنا_رابط_Apps_Script";   // يُستخدم فقط عند الاستضافة الخارجية: .../exec
 
 /* الرابط الثابت المطبوع في الـ QR.
    عند التقديم من Apps Script يُحقن تلقائياً، وعند الاستضافة الخارجية يؤخذ من العنوان الحالي. */
@@ -315,6 +325,7 @@ async function render(){
     if(parts[0] === "done")     return await doneView(parts[1], parts[2]);
     if(parts[0] === "new")      return await newClampView();
     if(parts[0] === "find")     return findView();
+    if(parts[0] === "report")   return await reportView();
     return await homeView();
   }catch(e){
     view.innerHTML = `<h1>تعذّر التحميل</h1><p class="sub">${esc(e.message)}</p>
@@ -369,9 +380,11 @@ async function homeView(){
       </div></a>`; }).join("") : `<p class="empty">لا توجد كلابش مركّبة الآن.</p>` }</div>
     <h2>غير ذلك</h2>
     <div class="two" style="margin-top:0">
+      <button onclick="go('#/report')">التقارير</button>
       <button onclick="go('#/find')">بحث برقم اللوحة</button>
-      <button onclick="go('#/tag')">الملصق الموحّد</button>
     </div>
+    <div style="margin-top:10px"><button onclick="go('#/tag')">الملصق الموحّد</button></div>
+    ${notifyOK() ? "" : `<div style="margin-top:10px"><button class="primary" onclick="askNotify()">تفعيل إشعارات المتصفح</button></div>`}
     <button class="quiet" style="margin-top:14px" onclick="signOut()">تسجيل الخروج</button>
     <div class="bar"><div class="in"><button class="danger" onclick="go('#/new')">تركيب كلبشة</button></div></div>`;
 }
@@ -392,12 +405,14 @@ async function newClampView(){
       <select id="v">${VIOLATIONS.map(v => `<option>${v}</option>`).join("")}</select>
       <label for="cn">رقم الكلبشة</label>
       <select id="cn">${d.available.length ? d.available.map(n => `<option>${esc(n)}</option>`).join("") : `<option value="">لا توجد كلابش متاحة</option>`}</select>
+      <div id="hist"></div>
       <label>صورة السيارة والكلبشة</label>
       ${photoField("ph1","إضافة صورة")}
       <p class="err" id="e"></p>
     </div>
     <div class="bar"><div class="in"><button class="danger" id="save" onclick="saveClamp()">تثبيت الحالة</button></div></div>`;
   plateBind();
+  plateCells().forEach(el => el.addEventListener("input", checkHistory));
   navigator.geolocation && navigator.geolocation.getCurrentPosition(p => { window.GEO = [p.coords.latitude, p.coords.longitude]; }, ()=>{}, {timeout:8000});
 }
 window.saveClamp = async function(){
@@ -499,12 +514,14 @@ async function caseView(id, token){
   }
 
   PHOTOS = {};
+  const hist = await api("plate", {plate: c.plate});
   view.innerHTML = `
     <h1>فك الكلبشة</h1>
     <div class="card">${head}${facts}
       ${c.repeat > 1 ? `<div class="note" style="margin-bottom:0">تكرار رقم ${c.repeat} لهذه اللوحة خلال ٩٠ يوماً — طبّق إجراء التصعيد.</div>` : ""}
       ${c.requestedAt ? `<div class="note" style="margin-bottom:0">طلب المخالف الفك ${since(c.requestedAt)} — جواله ${esc(c.violatorPhone)}</div>` : ""}
     </div>
+    ${historyCard(hist)}
     <div class="card">
       <label for="vn">اسم المخالف</label><input id="vn" autocomplete="name">
       <label for="vi">الرقم الوظيفي أو الهوية</label><input id="vi" inputmode="numeric">
@@ -636,6 +653,122 @@ window.doFind = async function(){
         <div class="meta">${esc(c.id)} · ${clock(c.clampAt)}</div></div>
       <span class="state ${c.status==="released"?"freed":"locked"}">${c.status==="released"?"مفكوكة":"مركّبة"}</span>
     </div></a>`).join("") + "</div>" : `<p class="empty">لا توجد حالات لهذه اللوحة.</p>`;
+};
+
+
+/* ============ إشعارات المتصفح ============ */
+let SEEN = new Date().toISOString();
+let SHOWN = {};
+
+window.askNotify = async function(){
+  if(!("Notification" in window)){ alert("المتصفح لا يدعم الإشعارات."); return; }
+  await Notification.requestPermission();
+  render();
+};
+function notifyOK(){ return ("Notification" in window) && Notification.permission === "granted"; }
+
+function fireNotice(c){
+  if(SHOWN[c.id + c.requestedAt]) return;
+  SHOWN[c.id + c.requestedAt] = 1;
+  try{
+    const n = new Notification("طلب فك كلبشة", {
+      body: c.plate + "\n" + c.location + " — كلبشة " + c.clampNo,
+      tag: c.id, requireInteraction: true, lang: "ar", dir: "rtl"
+    });
+    n.onclick = () => { window.focus(); go("#/c/" + c.id + "/" + c.token); n.close(); };
+  }catch(e){}
+  navigator.vibrate && navigator.vibrate([180,90,180]);
+}
+
+async function pollRequests(){
+  if(!EMP || !navigator.onLine || !notifyOK()) return;
+  try{
+    const d = await api("pending", {since: SEEN});
+    d.cases.forEach(fireNotice);
+    SEEN = d.now;
+    if(d.cases.length && (location.hash === "#/" || location.hash === "")) render();
+  }catch(e){}
+}
+setInterval(pollRequests, 20000);
+
+/* ============ سجل اللوحة ============ */
+window.checkHistory = async function(){
+  const box = document.getElementById("hist"); if(!box) return;
+  const p = plateValue(); if(!p.ok){ box.innerHTML = ""; return; }
+  try{
+    const d = await api("plate", {plate: p.text});
+    box.innerHTML = d.total
+      ? `<div class="note" style="margin:12px 0 0">هذه اللوحة عليها ${d.total} مخالفة سابقة، منها ${d.recent} خلال ٩٠ يوماً.</div>`
+      : `<p class="sub" style="margin:12px 0 0">لا توجد مخالفات سابقة على هذه اللوحة.</p>`;
+  }catch(e){}
+};
+
+function historyCard(d){
+  if(!d || !d.total) return `<div class="card"><p style="margin:0;font-size:15px">لا توجد مخالفات سابقة على هذه اللوحة.</p></div>`;
+  return `<div class="card">
+    <div class="rowtop" style="margin-bottom:6px">
+      <span class="caseno">المخالفات السابقة</span>
+      <span class="state ${d.recent > 1 ? "warn" : "freed"}">${d.total} إجمالاً · ${d.recent} خلال ٩٠ يوماً</span>
+    </div>
+    ${d.cases.map(c => `<div class="hist">
+      <span>${clock(c.clampAt)} — ${esc(c.violation)}</span>
+      <span style="color:var(--ink-2);white-space:nowrap">${c.status === "released" ? esc(c.duration||"") : "مركّبة"}</span>
+    </div>`).join("")}
+  </div>`;
+}
+
+/* ============ التقارير ============ */
+let RANGE = 30;
+window.setRange = function(d){ RANGE = d; go("#/report"); };
+
+const dur = m => m < 60 ? m + " دقيقة" : Math.floor(m/60) + " س " + (m%60) + " د";
+function bars(list, title){
+  if(!list.length) return "";
+  const max = Math.max.apply(null, list.map(x => x.n));
+  return `<h2>${title}</h2><div class="card bars">${list.map(x => `<div class="brow">
+      <div class="blab"><span>${esc(x.k)}</span><span>${x.n}</span></div>
+      <div class="btrk"><div class="bfil" style="width:${Math.round(x.n/max*100)}%"></div></div>
+    </div>`).join("")}</div>`;
+}
+
+async function reportView(){
+  const d = await api("report", {days: RANGE});
+  window.LASTREPORT = d;
+  view.innerHTML = `
+    <h1>التقارير</h1>
+    <div class="tabs">
+      ${[[1,"اليوم"],[7,"٧ أيام"],[30,"٣٠ يوم"],[90,"٩٠ يوم"]].map(([n,l]) =>
+        `<button class="${RANGE===n?"on":""}" style="flex:1" onclick="setRange(${n})">${l}</button>`).join("")}
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">إجمالي الحالات</div><div class="v">${d.total}</div></div>
+      <div class="stat"><div class="k">ما زالت مركّبة</div><div class="v">${d.open}</div></div>
+      <div class="stat"><div class="k">متوسط مدة الفك</div><div class="v" style="font-size:19px">${d.avgMin?dur(d.avgMin):"—"}</div></div>
+      <div class="stat"><div class="k">أطول مدة</div><div class="v" style="font-size:19px">${d.maxMin?dur(d.maxMin):"—"}</div></div>
+      <div class="stat"><div class="k">طلبات عبر الرمز</div><div class="v">${d.requested}</div></div>
+      <div class="stat"><div class="k">لوحات متكررة</div><div class="v">${d.repeats.length}</div></div>
+    </div>
+    ${bars(d.byLocation, "أكثر المواقع مخالفة")}
+    ${bars(d.byViolation, "أنواع المخالفات")}
+    ${bars(d.repeats, "لوحات تكررت في الفترة")}
+    ${bars(d.byStaff, "الحالات حسب الموظف")}
+    <h2>تصدير</h2>
+    <div class="two" style="margin-top:0">
+      <button onclick="exportCSV()">تنزيل CSV</button>
+      <button onclick="print()">طباعة</button>
+    </div>
+    <button class="quiet" style="margin-top:14px" onclick="go('#/')">رجوع للرئيسية</button>`;
+}
+
+window.exportCSV = function(){
+  const d = window.LASTREPORT; if(!d) return;
+  const head = ["رقم الحالة","اللوحة","الموقع","المخالفة","الكلبشة","الموظف","وقت التركيب","وقت الفك","المدة","المخالف"];
+  const csv = "\ufeff" + [head].concat(d.rows).map(r =>
+    r.map(c => '"' + String(c==null?"":c).replace(/"/g,'""') + '"').join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8"}));
+  a.download = "تقرير-الكلابش-" + d.days + "يوم.csv";
+  a.click();
 };
 
 flushQueue();
