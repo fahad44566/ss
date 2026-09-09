@@ -141,7 +141,7 @@ input[type=file]{display:none}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 /* ============ الإعدادات ============ */
-const API = "ضع_هنا_رابط_Apps_Script";   // يُستخدم فقط عند الاستضافة الخارجية: .../exec
+const API = "https://script.google.com/macros/s/AKfycbzIdIhtAq76GmXuscidls_ECexgXLS_uTO1tTIoAT31Ac1hYm73cHePsidUarLjy2dF1w/exec";   // يُستخدم فقط عند الاستضافة الخارجية: .../exec
 
 /* الرابط الثابت المطبوع في الـ QR.
    عند التقديم من Apps Script يُحقن تلقائياً، وعند الاستضافة الخارجية يؤخذ من العنوان الحالي. */
@@ -183,12 +183,30 @@ async function api(action, data){
         .rpc(JSON.stringify({action, emp:EMP, data}));
     });
   }
-  const res = await fetch(API, {
-    method:"POST",
-    headers:{"Content-Type":"text/plain;charset=utf-8"},
-    body: JSON.stringify({action, emp:EMP, data})
-  });
-  const out = await res.json();
+  const payload = JSON.stringify({action, emp:EMP, data});
+  let txt = "";
+  try{
+    const res = await fetch(API, {
+      method:"POST", redirect:"follow",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: payload
+    });
+    txt = await res.text();
+  }catch(err){ throw new Error("تعذّر الوصول للخادم — تحقق من الاتصال."); }
+
+  /* رد HTML يعني أن النداء لم يصل إلى doPost */
+  if(txt.trim().charAt(0) === "<"){
+    if(payload.length < 6000){
+      const r2 = await fetch(API + "?payload=" + encodeURIComponent(payload));
+      txt = await r2.text();
+    }
+    if(txt.trim().charAt(0) === "<")
+      throw new Error("الخادم رد بصفحة بدل بيانات. تأكد أن النشر: Execute as = Me، وWho has access = Anyone.");
+  }
+
+  let out;
+  try{ out = JSON.parse(txt); }
+  catch(e){ throw new Error("رد غير مفهوم من الخادم."); }
   if(!out.ok) throw new Error(out.error || "تعذّر إتمام العملية");
   return out.data;
 }
